@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Field Assignment - Map View</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; height: 100vh; display: flex; flex-direction: column; }
+
+    header {
+      height: 56px;
+      background: white;
+      border-bottom: 1px solid #e5e7eb;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+    }
+    header h1 { font-size: 18px; font-weight: 600; color: #111; }
+
+    .header-left { display: flex; align-items: center; gap: 16px; }
+    .header-right { display: flex; align-items: center; gap: 8px; }
+
+    .data-source {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #059669;
+      background: #d1fae5;
+      padding: 4px 10px;
+      border-radius: 12px;
+    }
+    .data-source.loading { color: #d97706; background: #fef3c7; }
+    .data-source.error { color: #dc2626; background: #fee2e2; }
+
+    .view-toggle {
+      display: flex;
+      background: #f3f4f6;
+      border-radius: 8px;
+      padding: 4px;
+    }
+    .view-toggle button {
+      padding: 6px 12px;
+      border: none;
+      background: transparent;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #6b7280;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .view-toggle button.active {
+      background: white;
+      color: #111;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .unsaved-badge { font-size: 13px; color: #d97706; margin-right: 8px; }
+
+    .btn {
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-primary { background: #2563eb; color: white; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-primary:disabled { background: #93c5fd; cursor: not-allowed; }
+    .btn-secondary { background: #f3f4f6; color: #374151; }
+    .btn-secondary:hover { background: #e5e7eb; }
+    .btn-active { background: #2563eb; color: white; }
+
+    main { flex: 1; position: relative; }
+    #map { height: 100%; width: 100%; }
+
+    .controls {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      z-index: 1000;
+      display: flex;
+      gap: 8px;
+    }
+
+    .legend {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      z-index: 1000;
+      background: white;
+      padding: 12px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      max-height: calc(100vh - 150px);
+      overflow-y: auto;
+    }
+    .legend h4 { font-size: 11px; text-transform: uppercase; color: #6b7280; margin-bottom: 8px; font-weight: 600; }
+    .legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 4px; }
+    .legend-dot { width: 12px; height: 12px; border-radius: 50%; }
+
+    .assignment-panel {
+      position: absolute;
+      bottom: 16px;
+      left: 16px;
+      right: 16px;
+      max-width: 420px;
+      z-index: 1000;
+      background: white;
+      padding: 16px;
+      border-radius: 10px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+      display: none;
+    }
+    .assignment-panel.visible { display: block; }
+    .assignment-panel h3 { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+
+    .summary-row { display: flex; gap: 12px; margin-bottom: 16px; }
+    .summary-item { background: #f9fafb; padding: 8px 12px; border-radius: 6px; font-size: 13px; }
+    .summary-item span { color: #6b7280; }
+    .summary-item strong { color: #111; }
+
+    .form-row { display: flex; gap: 12px; margin-bottom: 12px; }
+    .form-group { flex: 1; }
+    .form-group label { display: block; font-size: 11px; color: #6b7280; margin-bottom: 4px; }
+    .form-group select, .form-group input {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+
+    .assign-btn {
+      width: 100%;
+      padding: 10px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .assign-btn:hover { background: #1d4ed8; }
+    .assign-btn:disabled { background: #9ca3af; cursor: not-allowed; }
+
+    .loading-overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(255,255,255,0.9);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+    }
+    .loading-overlay.hidden { display: none; }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid #e5e7eb;
+      border-top-color: #2563eb;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text { margin-top: 16px; color: #6b7280; font-size: 14px; }
+
+    .stats-bar {
+      position: absolute;
+      bottom: 16px;
+      right: 16px;
+      z-index: 1000;
+      background: white;
+      padding: 12px 16px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      display: flex;
+      gap: 20px;
+    }
+    .stat { text-align: center; }
+    .stat-value { font-size: 20px; font-weight: 600; color: #111; }
+    .stat-label { font-size: 11px; color: #6b7280; text-transform: uppercase; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-left">
+      <h1>Field Assignment</h1>
+      <div class="data-source loading" id="dataSource">
+        <span>Loading...</span>
+      </div>
+      <div class="view-toggle">
+        <button class="active">Map</button>
+        <button onclick="window.location.href='timeline.html'">Timeline</button>
+      </div>
+    </div>
+    <div class="header-right">
+      <span class="unsaved-badge" id="unsavedBadge" style="display:none">0 unsaved</span>
+      <button class="btn btn-secondary" id="discardBtn" style="display:none">Discard</button>
+      <button class="btn btn-primary" id="saveBtn" style="display:none" disabled>Save to AirTable</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="loading-overlay" id="loadingOverlay">
+      <div class="spinner"></div>
+      <div class="loading-text">Loading data from AirTable...</div>
+    </div>
+
+    <div class="controls">
+      <button class="btn btn-secondary" id="lassoBtn">Lasso Select</button>
+      <button class="btn btn-secondary" id="clearBtn" style="display:none">Clear (0)</button>
+    </div>
+
+    <div class="legend">
+      <h4>Technicians</h4>
+      <div id="legendItems"></div>
+      <div class="legend-item" style="margin-top:8px; padding-top:8px; border-top:1px solid #e5e7eb;">
+        <div class="legend-dot" style="background:#d1d5db"></div>
+        <span style="color:#6b7280">Unassigned</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#F97316"></div>
+        <span style="color:#D97706;font-weight:500">Urgent (&lt;2 weeks)</span>
+      </div>
+    </div>
+
+    <div class="stats-bar" id="statsBar">
+      <div class="stat">
+        <div class="stat-value" id="totalFieldsCount">-</div>
+        <div class="stat-label">Fields</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="totalAcresCount">-</div>
+        <div class="stat-label">Total Acres</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="unassignedCount">-</div>
+        <div class="stat-label">Unassigned</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="urgentCount" style="color:#D97706">-</div>
+        <div class="stat-label" style="color:#D97706">Urgent</div>
+      </div>
+    </div>
+
+    <div class="assignment-panel" id="assignmentPanel">
+      <h3 id="panelTitle">Assign 0 Fields</h3>
+      <div class="summary-row">
+        <div class="summary-item"><span>Total Acres:</span> <strong id="totalAcres">0</strong></div>
+        <div class="summary-item"><span>Est. Duration:</span> <strong id="totalDays">0</strong> tech-days</div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Technician</label>
+          <select id="techSelect"><option value="">Select...</option></select>
+        </div>
+        <div class="form-group">
+          <label>Start Date</label>
+          <input type="date" id="dateInput">
+        </div>
+      </div>
+      <button class="assign-btn" id="assignBtn" disabled>Assign Fields</button>
+    </div>
+
+    <div id="map"></div>
+  </main>
+
+  <script>
+    // State
+    let fields = [];
+    let technicians = [];
+    let techUnavailability = {};
+    let selectedFieldIds = [];
+    let pendingChanges = [];
+    let markers = {};
+    let map = null;
+    let lassoMode = false;
+    let lassoPoints = [];
+    let lassoPolyline = null;
+
+    const ACRES_PER_DAY = 40;
+    const URGENT_COLOR = '#F97316';
+
+    // Load data from API
+    async function loadData() {
+      try {
+        const [fieldsRes, techsRes, unavailRes] = await Promise.all([
+          fetch('/api/fields').then(r => r.json()),
+          fetch('/api/technicians').then(r => r.json()),
+          fetch('/api/unavailability').then(r => r.json())
+        ]);
+
+        if (!fieldsRes.success || !techsRes.success) {
+          throw new Error('API returned error');
+        }
+
+        fields = fieldsRes.fields;
+        technicians = techsRes.technicians;
+        techUnavailability = unavailRes.unavailability || {};
+
+        document.getElementById('loadingOverlay').classList.add('hidden');
+        document.getElementById('dataSource').classList.remove('loading');
+        document.getElementById('dataSource').innerHTML = `<span>Connected: AirTable (${fields.length} fields)</span>`;
+
+        initializeApp();
+
+      } catch (error) {
+        console.error('Failed to load data:', error);
+        document.getElementById('dataSource').classList.remove('loading');
+        document.getElementById('dataSource').classList.add('error');
+        document.getElementById('dataSource').innerHTML = '<span>Connection failed</span>';
+        document.getElementById('loadingOverlay').querySelector('.loading-text').textContent =
+          'Failed to connect to AirTable. Check console for details.';
+      }
+    }
+
+    // Helpers
+    function getTech(id) { return technicians.find(t => t.id === id); }
+    function getTechDays(acres) { return Math.ceil(acres / ACRES_PER_DAY); }
+
+    function isUrgent(field) {
+      if (!field.latestAvailable) return false;
+      const today = new Date();
+      const latestDate = new Date(field.latestAvailable);
+      const twoWeeksFromNow = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000);
+      return latestDate <= twoWeeksFromNow;
+    }
+
+    function isUnavailable(techId, dateStr) {
+      const unavail = techUnavailability[techId];
+      if (!unavail) return null;
+      const checkDate = new Date(dateStr);
+      for (const period of unavail) {
+        const start = new Date(period.start);
+        const end = new Date(period.end);
+        if (checkDate >= start && checkDate <= end) {
+          return period.reason;
+        }
+      }
+      return null;
+    }
+
+    function getMarkerColor(field, isSelected) {
+      if (isSelected) return '#000000';
+      if (isUrgent(field) && !field.technicianId) return URGENT_COLOR;
+      const tech = getTech(field.technicianId);
+      return tech ? tech.color : '#9CA3AF';
+    }
+
+    function getFillColor(field, isSelected) {
+      const tech = getTech(field.technicianId);
+      if (isUrgent(field) && !field.technicianId) {
+        return isSelected ? URGENT_COLOR : '#FDBA74';
+      }
+      if (isSelected) return tech ? tech.color : '#6B7280';
+      return tech ? tech.color : '#D1D5DB';
+    }
+
+    function initializeApp() {
+      // Calculate center
+      const avgLat = fields.reduce((sum, f) => sum + f.lat, 0) / fields.length;
+      const avgLng = fields.reduce((sum, f) => sum + f.lng, 0) / fields.length;
+
+      // Initialize map
+      map = L.map('map').setView([avgLat, avgLng], 8);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap'
+      }).addTo(map);
+
+      // Build legend
+      const legendItems = document.getElementById('legendItems');
+      technicians.forEach(t => {
+        const div = document.createElement('div');
+        div.className = 'legend-item';
+        div.innerHTML = `<div class="legend-dot" style="background:${t.color}"></div><span>${t.name}</span>`;
+        legendItems.appendChild(div);
+      });
+
+      // Build tech select
+      updateTechSelect();
+
+      // Set default date
+      document.getElementById('dateInput').value = new Date().toISOString().split('T')[0];
+      updateTechSelect();
+
+      // Create markers
+      fields.forEach(createMarker);
+
+      // Fit bounds
+      if (fields.length > 0) {
+        const bounds = L.latLngBounds(fields.map(f => [f.lat, f.lng]));
+        map.fitBounds(bounds, { padding: [50, 50] });
+      }
+
+      // Event handlers
+      setupEventHandlers();
+      updateStats();
+    }
+
+    function updateTechSelect() {
+      const techSelect = document.getElementById('techSelect');
+      const selectedDate = document.getElementById('dateInput').value;
+      const currentValue = techSelect.value;
+
+      techSelect.innerHTML = '<option value="">Select...</option>';
+      technicians.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t.id;
+        const unavailReason = isUnavailable(t.id, selectedDate);
+        if (unavailReason) {
+          opt.textContent = `${t.fullName} — ⛔ ${unavailReason}`;
+          opt.disabled = true;
+        } else {
+          opt.textContent = `${t.fullName} (${t.location})`;
+        }
+        techSelect.appendChild(opt);
+      });
+
+      if (currentValue && !isUnavailable(currentValue, selectedDate)) {
+        techSelect.value = currentValue;
+      }
+    }
+
+    function createMarker(field) {
+      const isSelected = selectedFieldIds.includes(field.id);
+      const radius = Math.max(8, Math.min(20, field.acres / 15));
+      const tech = getTech(field.technicianId);
+      const techDays = getTechDays(field.acres);
+
+      const marker = L.circleMarker([field.lat, field.lng], {
+        radius,
+        color: getMarkerColor(field, isSelected),
+        fillColor: getFillColor(field, isSelected),
+        fillOpacity: isSelected ? 0.9 : 0.7,
+        weight: isSelected ? 3 : 2,
+      }).addTo(map);
+
+      const urgent = isUrgent(field);
+      const urgentBadge = urgent ? `<span style="background:#FEF3C7;color:#D97706;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;margin-left:8px">⚠ URGENT</span>` : '';
+
+      marker.bindPopup(`
+        <div style="min-width:200px">
+          <h3 style="font-weight:600;font-size:14px;margin:0 0 8px">${field.name}${urgentBadge}</h3>
+          <div style="font-size:12px;color:#4b5563">
+            <p><b>Size:</b> ${field.acres.toLocaleString()} acres</p>
+            <p><b>Est. Duration:</b> ${techDays} tech-day${techDays > 1 ? 's' : ''}</p>
+            <p><b>Latest Available:</b> <span style="${urgent ? 'color:#D97706;font-weight:600' : ''}">${field.latestAvailable || 'Not set'}</span></p>
+            <hr style="margin:8px 0;border:0;border-top:1px solid #e5e7eb">
+            ${tech
+              ? `<p><b>Assigned to:</b> <span style="color:${tech.color}">${tech.fullName}</span></p>
+                 <p><b>Scheduled:</b> ${field.scheduledDate}</p>`
+              : `<p style="color:#9ca3af;font-style:italic">Unassigned</p>`
+            }
+          </div>
+        </div>
+      `);
+
+      marker.on('click', (e) => {
+        if (!lassoMode) {
+          L.DomEvent.stopPropagation(e);
+          toggleSelection(field.id);
+        }
+      });
+
+      markers[field.id] = marker;
+    }
+
+    function updateMarker(field) {
+      const marker = markers[field.id];
+      if (!marker) return;
+      const isSelected = selectedFieldIds.includes(field.id);
+      marker.setStyle({
+        color: getMarkerColor(field, isSelected),
+        fillColor: getFillColor(field, isSelected),
+        fillOpacity: isSelected ? 0.9 : 0.7,
+        weight: isSelected ? 3 : 2,
+      });
+    }
+
+    function toggleSelection(fieldId) {
+      const idx = selectedFieldIds.indexOf(fieldId);
+      if (idx >= 0) {
+        selectedFieldIds.splice(idx, 1);
+      } else {
+        selectedFieldIds.push(fieldId);
+      }
+      updateUI();
+    }
+
+    function clearSelection() {
+      selectedFieldIds = [];
+      updateUI();
+    }
+
+    function updateStats() {
+      const totalAcres = fields.reduce((sum, f) => sum + f.acres, 0);
+      const unassigned = fields.filter(f => !f.technicianId).length;
+      const urgent = fields.filter(f => isUrgent(f) && !f.technicianId).length;
+      document.getElementById('totalFieldsCount').textContent = fields.length;
+      document.getElementById('totalAcresCount').textContent = Math.round(totalAcres).toLocaleString();
+      document.getElementById('unassignedCount').textContent = unassigned;
+      document.getElementById('urgentCount').textContent = urgent;
+    }
+
+    function updateUI() {
+      fields.forEach(f => updateMarker(f));
+
+      const clearBtn = document.getElementById('clearBtn');
+      if (selectedFieldIds.length > 0) {
+        clearBtn.style.display = 'flex';
+        clearBtn.textContent = `Clear (${selectedFieldIds.length})`;
+      } else {
+        clearBtn.style.display = 'none';
+      }
+
+      const panel = document.getElementById('assignmentPanel');
+      if (selectedFieldIds.length > 0) {
+        panel.classList.add('visible');
+        document.getElementById('panelTitle').textContent = `Assign ${selectedFieldIds.length} Field${selectedFieldIds.length > 1 ? 's' : ''}`;
+
+        const selectedFields = fields.filter(f => selectedFieldIds.includes(f.id));
+        const totalAcres = selectedFields.reduce((sum, f) => sum + f.acres, 0);
+        const totalDays = selectedFields.reduce((sum, f) => sum + getTechDays(f.acres), 0);
+
+        document.getElementById('totalAcres').textContent = totalAcres.toLocaleString();
+        document.getElementById('totalDays').textContent = totalDays;
+      } else {
+        panel.classList.remove('visible');
+      }
+
+      updateUnsavedUI();
+      updateAssignButton();
+      updateStats();
+    }
+
+    function updateAssignButton() {
+      const techId = document.getElementById('techSelect').value;
+      const date = document.getElementById('dateInput').value;
+      document.getElementById('assignBtn').disabled = !techId || !date || selectedFieldIds.length === 0;
+    }
+
+    function updateUnsavedUI() {
+      const badge = document.getElementById('unsavedBadge');
+      const discardBtn = document.getElementById('discardBtn');
+      const saveBtn = document.getElementById('saveBtn');
+
+      if (pendingChanges.length > 0) {
+        badge.style.display = 'inline';
+        badge.textContent = `${pendingChanges.length} unsaved`;
+        discardBtn.style.display = 'inline-flex';
+        saveBtn.style.display = 'inline-flex';
+        saveBtn.disabled = false;
+      } else {
+        badge.style.display = 'none';
+        discardBtn.style.display = 'none';
+        saveBtn.style.display = 'none';
+      }
+    }
+
+    function setupEventHandlers() {
+      // Lasso
+      const lassoBtn = document.getElementById('lassoBtn');
+      lassoBtn.addEventListener('click', () => {
+        if (lassoMode) {
+          disableLasso();
+        } else {
+          enableLasso();
+        }
+      });
+
+      map.on('mousedown', (e) => {
+        if (!lassoMode) return;
+        lassoPoints = [e.latlng];
+        if (lassoPolyline) map.removeLayer(lassoPolyline);
+        lassoPolyline = L.polyline([e.latlng], { color: '#000', weight: 2, dashArray: '5,5' }).addTo(map);
+      });
+
+      map.on('mousemove', (e) => {
+        if (!lassoMode || lassoPoints.length === 0) return;
+        lassoPoints.push(e.latlng);
+        lassoPolyline.setLatLngs(lassoPoints);
+      });
+
+      map.on('mouseup', () => {
+        if (!lassoMode || lassoPoints.length < 3) return;
+        lassoPoints.push(lassoPoints[0]);
+
+        selectedFieldIds = fields
+          .filter(f => pointInPolygon({lat: f.lat, lng: f.lng}, lassoPoints))
+          .map(f => f.id);
+
+        updateUI();
+        disableLasso();
+      });
+
+      // Clear
+      document.getElementById('clearBtn').addEventListener('click', clearSelection);
+
+      // Form
+      document.getElementById('techSelect').addEventListener('change', updateAssignButton);
+      document.getElementById('dateInput').addEventListener('change', () => {
+        updateTechSelect();
+        updateAssignButton();
+      });
+
+      // Assign
+      document.getElementById('assignBtn').addEventListener('click', () => {
+        const techId = document.getElementById('techSelect').value;
+        const date = document.getElementById('dateInput').value;
+
+        selectedFieldIds.forEach(fieldId => {
+          const field = fields.find(f => f.id === fieldId);
+          if (field) {
+            pendingChanges.push({
+              fieldId,
+              oldTechId: field.technicianId,
+              oldDate: field.scheduledDate,
+              technicianId: techId,
+              scheduledDate: date
+            });
+            field.technicianId = techId;
+            field.scheduledDate = date;
+          }
+        });
+
+        clearSelection();
+        Object.values(markers).forEach(m => map.removeLayer(m));
+        markers = {};
+        fields.forEach(createMarker);
+        updateUI();
+      });
+
+      // Save
+      document.getElementById('saveBtn').addEventListener('click', async () => {
+        const saveBtn = document.getElementById('saveBtn');
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+
+        try {
+          const res = await fetch('/api/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ changes: pendingChanges })
+          });
+          const result = await res.json();
+
+          if (result.success) {
+            alert(`Saved ${result.updatedIds.length} changes to AirTable!`);
+            pendingChanges = [];
+            updateUnsavedUI();
+          } else {
+            alert('Failed to save: ' + result.error);
+          }
+        } catch (error) {
+          alert('Failed to save: ' + error.message);
+        }
+
+        saveBtn.textContent = 'Save to AirTable';
+        saveBtn.disabled = pendingChanges.length === 0;
+      });
+
+      // Discard
+      document.getElementById('discardBtn').addEventListener('click', () => {
+        pendingChanges.reverse().forEach(change => {
+          const field = fields.find(f => f.id === change.fieldId);
+          if (field) {
+            field.technicianId = change.oldTechId;
+            field.scheduledDate = change.oldDate;
+          }
+        });
+        pendingChanges = [];
+
+        Object.values(markers).forEach(m => map.removeLayer(m));
+        markers = {};
+        fields.forEach(createMarker);
+        updateUI();
+      });
+    }
+
+    function enableLasso() {
+      lassoMode = true;
+      document.getElementById('lassoBtn').classList.add('btn-active');
+      document.getElementById('lassoBtn').classList.remove('btn-secondary');
+      map.dragging.disable();
+      map.getContainer().style.cursor = 'crosshair';
+    }
+
+    function disableLasso() {
+      lassoMode = false;
+      document.getElementById('lassoBtn').classList.remove('btn-active');
+      document.getElementById('lassoBtn').classList.add('btn-secondary');
+      map.dragging.enable();
+      map.getContainer().style.cursor = '';
+      if (lassoPolyline) {
+        map.removeLayer(lassoPolyline);
+        lassoPolyline = null;
+      }
+      lassoPoints = [];
+    }
+
+    function pointInPolygon(point, polygon) {
+      if (polygon.length < 3) return false;
+      let inside = false;
+      const x = point.lng, y = point.lat;
+      for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        const xi = polygon[i].lng, yi = polygon[i].lat;
+        const xj = polygon[j].lng, yj = polygon[j].lat;
+        if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
+          inside = !inside;
+        }
+      }
+      return inside;
+    }
+
+    // Start
+    loadData();
+  </script>
+</body>
+</html>

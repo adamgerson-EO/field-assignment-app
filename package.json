@@ -1,0 +1,16 @@
+{
+  "name": "field-assignment-app",
+  "version": "1.0.0",
+  "description": "Field assignment app for EarthOptics Operations Team",
+  "private": true,
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  },
+  "dependencies": {
+    "airtable": "^0.12.2"
+  },
+  "devDependencies": {
+    "vercel": "^33.0.0"
+  }
+}
