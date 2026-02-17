@@ -454,7 +454,7 @@
         <div style="min-width:200px">
           <h3 style="font-weight:600;font-size:14px;margin:0 0 8px">${field.name}${urgentBadge}</h3>
           <div style="font-size:12px;color:#4b5563">
-            <p><b>Size:</b> ${field.acres.toLocaleString()} acres</p>
+            <p><b>Size:</b> ${Math.round(field.acres).toLocaleString()} acres</p>
             <p><b>Est. Duration:</b> ${techDays} tech-day${techDays > 1 ? 's' : ''}</p>
             <p><b>Latest Available:</b> <span style="${urgent ? 'color:#D97706;font-weight:600' : ''}">${field.latestAvailable || 'Not set'}</span></p>
             <hr style="margin:8px 0;border:0;border-top:1px solid #e5e7eb">

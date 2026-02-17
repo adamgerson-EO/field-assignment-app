@@ -170,7 +170,7 @@
         <div class="aggregation-content expanded" id="aggContent">
           <div class="agg-grid">
             <div class="agg-card"><h4>Total Scheduled</h4><div class="agg-value" id="aggTotalAcres">-</div><div class="agg-sub">acres</div></div>
-            <div class="agg-card"><h4>Total Tech-Days</h4><div class="agg-value" id="aggTotalDays">-</div><div class="agg-sub">@ 40 acres/day</div></div>
+            <div class="agg-card"><h4>Total Tech-Days</h4><div class="agg-value" id="aggTotalDays">-</div><div class="agg-sub">estimated</div></div>
             <div class="agg-card"><h4>Fields Scheduled</h4><div class="agg-value" id="aggFieldCount">-</div><div class="agg-sub">of <span id="aggTotalFields">-</span> total</div></div>
           </div>
           <div class="tech-breakdown"><h4>By Technician</h4><div id="techBreakdown"></div></div>
@@ -271,8 +271,8 @@
           <div class="field-card" draggable="true" data-field-id="${field.id}" style="${style}">
             <div class="field-card-name">${field.name} ${badge}</div>
             <div class="field-card-meta">
-              <span>${field.acres.toLocaleString()} ac</span>
-              <span>${getTechDays(field)} days</span>
+              <span>${Math.round(field.acres).toLocaleString()} ac</span>
+              <span>${getTechDays(field)} tech-days</span>
             </div>
           </div>
         `;
@@ -332,7 +332,7 @@
               ${scheduled.map(field => `
                 <div class="scheduled-field" draggable="true" data-field-id="${field.id}" style="border-color: ${tech.color}">
                   <strong>${field.name}</strong><br>
-                  <span style="font-size:10px;color:#6b7280">${field.acres} ac | ${getTechDays(field)}d</span>
+                  <span style="font-size:10px;color:#6b7280">${Math.round(field.acres)} ac | ${getTechDays(field)} td</span>
                 </div>
               `).join('')}
             </div>
