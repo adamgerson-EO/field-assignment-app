@@ -1,1 +1,9 @@
-{}
+{
+  "version": 2,
+  "functions": {
+    "api/fields.js": { "runtime": "@vercel/node@3" },
+    "api/technicians.js": { "runtime": "@vercel/node@3" },
+    "api/unavailability.js": { "runtime": "@vercel/node@3" },
+    "api/update.js": { "runtime": "@vercel/node@3" }
+  }
+}
