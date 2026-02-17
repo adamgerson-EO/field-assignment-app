@@ -328,7 +328,7 @@
 
     // Helpers
     function getTech(id) { return technicians.find(t => t.id === id); }
-    function getTechDays(acres) { return Math.ceil(acres / ACRES_PER_DAY); }
+    function getTechDays(field) { return Math.ceil(field.acres / (field.acresPerDay || 40)); }
 
     function isUrgent(field) {
       if (!field.latestAvailable) return false;
@@ -437,7 +437,7 @@
       const isSelected = selectedFieldIds.includes(field.id);
       const radius = Math.max(8, Math.min(20, field.acres / 15));
       const tech = getTech(field.technicianId);
-      const techDays = getTechDays(field.acres);
+      const techDays = getTechDays(field);
 
       const marker = L.circleMarker([field.lat, field.lng], {
         radius,
@@ -532,7 +532,7 @@
 
         const selectedFields = fields.filter(f => selectedFieldIds.includes(f.id));
         const totalAcres = selectedFields.reduce((sum, f) => sum + f.acres, 0);
-        const totalDays = selectedFields.reduce((sum, f) => sum + getTechDays(f.acres), 0);
+        const totalDays = selectedFields.reduce((sum, f) => sum + getTechDays(f), 0);
 
         document.getElementById('totalAcres').textContent = totalAcres.toLocaleString();
         document.getElementById('totalDays').textContent = totalDays;

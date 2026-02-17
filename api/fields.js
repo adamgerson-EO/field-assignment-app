@@ -39,7 +39,8 @@ module.exports = async (req, res) => {
           'Schedule Status',
           'Latest Available',
           'Field Team Planned',
-          'Schedule Date'
+          'Schedule Date',
+          'Productivity (acreage) (from All Engagements)'
         ],
         maxRecords: 500
       })
@@ -55,7 +56,8 @@ module.exports = async (req, res) => {
       status: record.get('Schedule Status') || 'Not Scheduled',
       latestAvailable: record.get('Latest Available') || null,
       technicianId: record.get('Field Team Planned')?.[0] || null,
-      scheduledDate: record.get('Schedule Date') || null
+      scheduledDate: record.get('Schedule Date') || null,
+      acresPerDay: parseFloat(record.get('Productivity (acreage) (from All Engagements)')?.[0]) || 40
     }));
 
     return res.status(200).json({
