@@ -61,7 +61,7 @@ module.exports = async (req, res) => {
     }));
 
     return res.status(200).json({
-      success: true, version: 2,
+      success: true,
       count: fields.length,
       fields
     });
