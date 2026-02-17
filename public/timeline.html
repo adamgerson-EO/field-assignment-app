@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Field Assignment - Timeline View</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; height: 100vh; display: flex; flex-direction: column; background: #f9fafb; }
+
+    header {
+      height: 56px;
+      background: white;
+      border-bottom: 1px solid #e5e7eb;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      flex-shrink: 0;
+    }
+    header h1 { font-size: 18px; font-weight: 600; color: #111; }
+
+    .header-left { display: flex; align-items: center; gap: 16px; }
+    .header-right { display: flex; align-items: center; gap: 8px; }
+
+    .data-source {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; color: #059669; background: #d1fae5;
+      padding: 4px 10px; border-radius: 12px;
+    }
+    .data-source.loading { color: #d97706; background: #fef3c7; }
+    .data-source.error { color: #dc2626; background: #fee2e2; }
+
+    .view-toggle { display: flex; background: #f3f4f6; border-radius: 8px; padding: 4px; }
+    .view-toggle button {
+      padding: 6px 12px; border: none; background: transparent;
+      border-radius: 6px; font-size: 13px; font-weight: 500;
+      color: #6b7280; cursor: pointer;
+    }
+    .view-toggle button.active { background: white; color: #111; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+
+    .unsaved-badge { font-size: 13px; color: #d97706; margin-right: 8px; }
+    .btn { padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; }
+    .btn-primary { background: #2563eb; color: white; }
+    .btn-primary:disabled { background: #93c5fd; cursor: not-allowed; }
+    .btn-secondary { background: #f3f4f6; color: #374151; }
+
+    main { flex: 1; display: flex; overflow: hidden; position: relative; }
+
+    .loading-overlay {
+      position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(255,255,255,0.95); display: flex;
+      flex-direction: column; align-items: center; justify-content: center; z-index: 2000;
+    }
+    .loading-overlay.hidden { display: none; }
+    .spinner { width: 40px; height: 40px; border: 3px solid #e5e7eb; border-top-color: #2563eb; border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text { margin-top: 16px; color: #6b7280; font-size: 14px; }
+
+    .backlog { width: 280px; background: white; border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; flex-shrink: 0; }
+    .backlog-header { padding: 16px; border-bottom: 1px solid #e5e7eb; }
+    .backlog-header h2 { font-size: 14px; font-weight: 600; color: #111; margin-bottom: 4px; }
+    .backlog-stats { font-size: 12px; color: #6b7280; }
+    .backlog-list { flex: 1; overflow-y: auto; padding: 12px; }
+
+    .field-card {
+      background: white; border: 1px solid #e5e7eb; border-radius: 8px;
+      padding: 10px 12px; margin-bottom: 8px; cursor: grab;
+    }
+    .field-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .field-card.dragging { opacity: 0.5; transform: rotate(2deg); }
+    .field-card-name { font-size: 13px; font-weight: 500; color: #111; margin-bottom: 4px; }
+    .field-card-meta { font-size: 11px; color: #6b7280; display: flex; gap: 8px; }
+
+    .timeline-container { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+    .timeline-header { display: flex; background: white; border-bottom: 1px solid #e5e7eb; flex-shrink: 0; }
+    .timeline-tech-col { width: 180px; padding: 12px 16px; border-right: 1px solid #e5e7eb; font-size: 12px; font-weight: 600; color: #6b7280; flex-shrink: 0; }
+    .timeline-dates { flex: 1; display: flex; overflow-x: auto; }
+    .timeline-date { min-width: 100px; padding: 8px 12px; text-align: center; border-right: 1px solid #f3f4f6; font-size: 11px; }
+    .timeline-date .day { font-weight: 600; color: #111; }
+    .timeline-date .weekday { color: #6b7280; }
+    .timeline-date.weekend { background: #f9fafb; }
+    .timeline-date.today { background: #eff6ff; }
+
+    .timeline-body { flex: 1; overflow: auto; }
+
+    .tech-row { display: flex; border-bottom: 1px solid #e5e7eb; min-height: 80px; }
+    .tech-info { width: 180px; padding: 12px 16px; border-right: 1px solid #e5e7eb; background: white; flex-shrink: 0; display: flex; align-items: center; gap: 10px; }
+    .tech-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 12px; }
+    .tech-name { font-size: 13px; font-weight: 500; color: #111; }
+    .tech-location { font-size: 11px; color: #6b7280; }
+
+    .tech-timeline { flex: 1; display: flex; background: #fafafa; }
+    .day-cell { min-width: 100px; border-right: 1px solid #f3f4f6; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+    .day-cell.weekend { background: #f3f4f6; }
+    .day-cell.today { background: #eff6ff; }
+    .day-cell.drop-target { background: #dbeafe; }
+    .day-cell.unavailable {
+      background: repeating-linear-gradient(45deg, #f3f4f6, #f3f4f6 4px, #e5e7eb 4px, #e5e7eb 8px);
+      cursor: not-allowed;
+    }
+    .day-cell.unavailable .unavail-label { font-size: 9px; color: #9ca3af; text-align: center; padding: 4px; font-style: italic; }
+
+    .scheduled-field { background: white; border-radius: 6px; padding: 6px 8px; font-size: 11px; border-left: 3px solid; box-shadow: 0 1px 3px rgba(0,0,0,0.1); cursor: grab; }
+
+    .aggregation-panel { background: white; border-top: 1px solid #e5e7eb; padding: 16px; flex-shrink: 0; }
+    .aggregation-toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; font-weight: 500; color: #374151; }
+    .aggregation-content { margin-top: 16px; display: none; }
+    .aggregation-content.expanded { display: block; }
+
+    .agg-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+    .agg-card { background: #f9fafb; border-radius: 8px; padding: 16px; }
+    .agg-card h4 { font-size: 12px; color: #6b7280; margin-bottom: 8px; }
+    .agg-value { font-size: 24px; font-weight: 600; color: #111; }
+    .agg-sub { font-size: 12px; color: #6b7280; margin-top: 4px; }
+
+    .tech-breakdown { margin-top: 16px; }
+    .tech-breakdown h4 { font-size: 12px; color: #6b7280; margin-bottom: 12px; }
+    .breakdown-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid #f3f4f6; }
+    .breakdown-bar { flex: 1; height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden; }
+    .breakdown-fill { height: 100%; border-radius: 4px; }
+    .breakdown-value { font-size: 12px; color: #374151; min-width: 80px; text-align: right; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-left">
+      <h1>Field Assignment</h1>
+      <div class="data-source loading" id="dataSource"><span>Loading...</span></div>
+      <div class="view-toggle">
+        <button onclick="window.location.href='index.html'">Map</button>
+        <button class="active">Timeline</button>
+      </div>
+    </div>
+    <div class="header-right">
+      <span class="unsaved-badge" id="unsavedBadge" style="display:none">0 unsaved</span>
+      <button class="btn btn-secondary" id="discardBtn" style="display:none">Discard</button>
+      <button class="btn btn-primary" id="saveBtn" style="display:none" disabled>Save to AirTable</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="loading-overlay" id="loadingOverlay">
+      <div class="spinner"></div>
+      <div class="loading-text">Loading data from AirTable...</div>
+    </div>
+
+    <div class="backlog">
+      <div class="backlog-header">
+        <h2>Backlog (Unassigned)</h2>
+        <div class="backlog-stats" id="backlogStats">- fields | - acres</div>
+      </div>
+      <div class="backlog-list" id="backlogList"></div>
+    </div>
+
+    <div class="timeline-container">
+      <div class="timeline-header">
+        <div class="timeline-tech-col">Technician</div>
+        <div class="timeline-dates" id="timelineDates"></div>
+      </div>
+      <div class="timeline-body" id="timelineBody"></div>
+      <div class="aggregation-panel">
+        <div class="aggregation-toggle" id="aggToggle">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="aggIcon" style="transform:rotate(180deg)">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+          Monthly Aggregation
+        </div>
+        <div class="aggregation-content expanded" id="aggContent">
+          <div class="agg-grid">
+            <div class="agg-card"><h4>Total Scheduled</h4><div class="agg-value" id="aggTotalAcres">-</div><div class="agg-sub">acres</div></div>
+            <div class="agg-card"><h4>Total Tech-Days</h4><div class="agg-value" id="aggTotalDays">-</div><div class="agg-sub">@ 40 acres/day</div></div>
+            <div class="agg-card"><h4>Fields Scheduled</h4><div class="agg-value" id="aggFieldCount">-</div><div class="agg-sub">of <span id="aggTotalFields">-</span> total</div></div>
+          </div>
+          <div class="tech-breakdown"><h4>By Technician</h4><div id="techBreakdown"></div></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let fields = [];
+    let technicians = [];
+    let techUnavailability = {};
+    let pendingChanges = [];
+    let draggedField = null;
+
+    const ACRES_PER_DAY = 40;
+    const URGENT_COLOR = '#F97316';
+
+    const today = new Date();
+    const dates = [];
+    for (let i = 0; i < 14; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i);
+      dates.push(d);
+    }
+
+    async function loadData() {
+      try {
+        const [fieldsRes, techsRes, unavailRes] = await Promise.all([
+          fetch('/api/fields').then(r => r.json()),
+          fetch('/api/technicians').then(r => r.json()),
+          fetch('/api/unavailability').then(r => r.json())
+        ]);
+
+        if (!fieldsRes.success || !techsRes.success) throw new Error('API error');
+
+        fields = fieldsRes.fields;
+        technicians = techsRes.technicians;
+        techUnavailability = unavailRes.unavailability || {};
+
+        document.getElementById('loadingOverlay').classList.add('hidden');
+        document.getElementById('dataSource').classList.remove('loading');
+        document.getElementById('dataSource').innerHTML = `<span>Connected: AirTable (${fields.length} fields)</span>`;
+
+        initializeApp();
+      } catch (error) {
+        console.error('Failed to load:', error);
+        document.getElementById('dataSource').classList.add('error');
+        document.getElementById('dataSource').innerHTML = '<span>Connection failed</span>';
+      }
+    }
+
+    function formatDate(date) { return date.toISOString().split('T')[0]; }
+    function getTech(id) { return technicians.find(t => t.id === id); }
+    function getTechDays(field) { return Math.ceil(field.acres / (field.acresPerDay || ACRES_PER_DAY)); }
+
+    function isUrgent(field) {
+      if (!field.latestAvailable) return false;
+      const latestDate = new Date(field.latestAvailable);
+      const twoWeeks = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000);
+      return latestDate <= twoWeeks;
+    }
+
+    function isUnavailable(techId, dateStr) {
+      const unavail = techUnavailability[techId];
+      if (!unavail) return null;
+      const checkDate = new Date(dateStr);
+      for (const p of unavail) {
+        if (checkDate >= new Date(p.start) && checkDate <= new Date(p.end)) return p.reason;
+      }
+      return null;
+    }
+
+    function initializeApp() {
+      renderBacklog();
+      renderTimeline();
+      updateAggregation();
+      setupEventHandlers();
+    }
+
+    function renderBacklog() {
+      const list = document.getElementById('backlogList');
+      const unassigned = fields.filter(f => !f.technicianId);
+
+      unassigned.sort((a, b) => {
+        const aU = isUrgent(a), bU = isUrgent(b);
+        if (aU && !bU) return -1;
+        if (!aU && bU) return 1;
+        if (a.latestAvailable && b.latestAvailable) return new Date(a.latestAvailable) - new Date(b.latestAvailable);
+        return 0;
+      });
+
+      list.innerHTML = unassigned.map(field => {
+        const urgent = isUrgent(field);
+        const style = urgent ? `border-left: 3px solid ${URGENT_COLOR}; background: #FFF7ED;` : '';
+        const badge = urgent ? `<span style="background:#FEF3C7;color:#D97706;padding:1px 4px;border-radius:3px;font-size:9px;font-weight:600;">⚠ ${field.latestAvailable}</span>` : '';
+        return `
+          <div class="field-card" draggable="true" data-field-id="${field.id}" style="${style}">
+            <div class="field-card-name">${field.name} ${badge}</div>
+            <div class="field-card-meta">
+              <span>${field.acres.toLocaleString()} ac</span>
+              <span>${getTechDays(field)} days</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      const totalAcres = unassigned.reduce((s, f) => s + f.acres, 0);
+      const urgentCount = unassigned.filter(f => isUrgent(f)).length;
+      const urgentText = urgentCount > 0 ? ` | <span style="color:#D97706;font-weight:600">${urgentCount} urgent</span>` : '';
+      document.getElementById('backlogStats').innerHTML = `${unassigned.length} fields | ${Math.round(totalAcres).toLocaleString()} acres${urgentText}`;
+
+      list.querySelectorAll('.field-card').forEach(card => {
+        card.addEventListener('dragstart', handleDragStart);
+        card.addEventListener('dragend', handleDragEnd);
+      });
+    }
+
+    function renderTimeline() {
+      const datesDiv = document.getElementById('timelineDates');
+      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+      datesDiv.innerHTML = dates.map(date => {
+        const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+        const isToday = formatDate(date) === formatDate(today);
+        return `
+          <div class="timeline-date ${isWeekend ? 'weekend' : ''} ${isToday ? 'today' : ''}">
+            <div class="day">${monthNames[date.getMonth()]} ${date.getDate()}</div>
+            <div class="weekday">${dayNames[date.getDay()]}</div>
+          </div>
+        `;
+      }).join('');
+
+      const body = document.getElementById('timelineBody');
+      body.innerHTML = technicians.map(tech => {
+        const initials = tech.fullName.split(' ').map(n => n[0]).join('');
+
+        const dayCells = dates.map(date => {
+          const dateStr = formatDate(date);
+          const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+          const isToday = dateStr === formatDate(today);
+          const unavailReason = isUnavailable(tech.id, dateStr);
+
+          const scheduled = fields.filter(f => f.technicianId === tech.id && f.scheduledDate === dateStr);
+
+          if (unavailReason) {
+            return `
+              <div class="day-cell unavailable ${isWeekend ? 'weekend' : ''} ${isToday ? 'today' : ''}"
+                   data-tech-id="${tech.id}" data-date="${dateStr}" data-unavailable="true">
+                <div class="unavail-label">${unavailReason}</div>
+              </div>
+            `;
+          }
+
+          return `
+            <div class="day-cell ${isWeekend ? 'weekend' : ''} ${isToday ? 'today' : ''}"
+                 data-tech-id="${tech.id}" data-date="${dateStr}">
+              ${scheduled.map(field => `
+                <div class="scheduled-field" draggable="true" data-field-id="${field.id}" style="border-color: ${tech.color}">
+                  <strong>${field.name}</strong><br>
+                  <span style="font-size:10px;color:#6b7280">${field.acres} ac | ${getTechDays(field)}d</span>
+                </div>
+              `).join('')}
+            </div>
+          `;
+        }).join('');
+
+        return `
+          <div class="tech-row">
+            <div class="tech-info">
+              <div class="tech-avatar" style="background:${tech.color}">${initials}</div>
+              <div><div class="tech-name">${tech.fullName}</div><div class="tech-location">${tech.location}</div></div>
+            </div>
+            <div class="tech-timeline">${dayCells}</div>
+          </div>
+        `;
+      }).join('');
+
+      body.querySelectorAll('.day-cell').forEach(cell => {
+        cell.addEventListener('dragover', handleDragOver);
+        cell.addEventListener('dragleave', handleDragLeave);
+        cell.addEventListener('drop', handleDrop);
+      });
+
+      body.querySelectorAll('.scheduled-field').forEach(card => {
+        card.addEventListener('dragstart', handleDragStart);
+        card.addEventListener('dragend', handleDragEnd);
+      });
+    }
+
+    function handleDragStart(e) {
+      draggedField = e.target.dataset.fieldId;
+      e.target.classList.add('dragging');
+    }
+
+    function handleDragEnd(e) {
+      e.target.classList.remove('dragging');
+      document.querySelectorAll('.day-cell').forEach(c => c.classList.remove('drop-target'));
+    }
+
+    function handleDragOver(e) {
+      if (e.currentTarget.dataset.unavailable === 'true') return;
+      e.preventDefault();
+      e.currentTarget.classList.add('drop-target');
+    }
+
+    function handleDragLeave(e) { e.currentTarget.classList.remove('drop-target'); }
+
+    function handleDrop(e) {
+      e.preventDefault();
+      e.currentTarget.classList.remove('drop-target');
+      if (e.currentTarget.dataset.unavailable === 'true' || !draggedField) return;
+
+      const techId = e.currentTarget.dataset.techId;
+      const date = e.currentTarget.dataset.date;
+      const field = fields.find(f => f.id === draggedField);
+
+      if (field) {
+        pendingChanges.push({
+          fieldId: field.id,
+          oldTechId: field.technicianId,
+          oldDate: field.scheduledDate,
+          technicianId: techId,
+          scheduledDate: date
+        });
+        field.technicianId = techId;
+        field.scheduledDate = date;
+
+        renderBacklog();
+        renderTimeline();
+        updateAggregation();
+        updateUnsavedUI();
+      }
+      draggedField = null;
+    }
+
+    function updateAggregation() {
+      const scheduled = fields.filter(f => f.technicianId);
+      const totalAcres = scheduled.reduce((s, f) => s + f.acres, 0);
+      const totalDays = scheduled.reduce((s, f) => s + getTechDays(f), 0);
+
+      document.getElementById('aggTotalAcres').textContent = Math.round(totalAcres).toLocaleString();
+      document.getElementById('aggTotalDays').textContent = totalDays;
+      document.getElementById('aggFieldCount').textContent = scheduled.length;
+      document.getElementById('aggTotalFields').textContent = fields.length;
+
+      const maxAcres = Math.max(...technicians.map(t => fields.filter(f => f.technicianId === t.id).reduce((s, f) => s + f.acres, 0)));
+
+      document.getElementById('techBreakdown').innerHTML = technicians.map(tech => {
+        const techFields = fields.filter(f => f.technicianId === tech.id);
+        const techAcres = techFields.reduce((s, f) => s + f.acres, 0);
+        const techDays = techFields.reduce((s, f) => s + getTechDays(f), 0);
+        const pct = maxAcres > 0 ? (techAcres / maxAcres) * 100 : 0;
+
+        return `
+          <div class="breakdown-row">
+            <div style="width:120px;font-size:13px;color:#374151">${tech.name}</div>
+            <div class="breakdown-bar"><div class="breakdown-fill" style="width:${pct}%;background:${tech.color}"></div></div>
+            <div class="breakdown-value">${Math.round(techAcres)} ac / ${techDays}d</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function updateUnsavedUI() {
+      const badge = document.getElementById('unsavedBadge');
+      const discardBtn = document.getElementById('discardBtn');
+      const saveBtn = document.getElementById('saveBtn');
+
+      if (pendingChanges.length > 0) {
+        badge.style.display = 'inline';
+        badge.textContent = `${pendingChanges.length} unsaved`;
+        discardBtn.style.display = 'inline-flex';
+        saveBtn.style.display = 'inline-flex';
+        saveBtn.disabled = false;
+      } else {
+        badge.style.display = 'none';
+        discardBtn.style.display = 'none';
+        saveBtn.style.display = 'none';
+      }
+    }
+
+    function setupEventHandlers() {
+      document.getElementById('aggToggle').addEventListener('click', () => {
+        const content = document.getElementById('aggContent');
+        const icon = document.getElementById('aggIcon');
+        content.classList.toggle('expanded');
+        icon.style.transform = content.classList.contains('expanded') ? 'rotate(180deg)' : '';
+      });
+
+      document.getElementById('saveBtn').addEventListener('click', async () => {
+        const saveBtn = document.getElementById('saveBtn');
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+
+        try {
+          const res = await fetch('/api/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ changes: pendingChanges })
+          });
+          const result = await res.json();
+
+          if (result.success) {
+            alert(`Saved ${result.updatedIds.length} changes!`);
+            pendingChanges = [];
+            updateUnsavedUI();
+          } else {
+            alert('Failed: ' + result.error);
+          }
+        } catch (error) {
+          alert('Failed: ' + error.message);
+        }
+
+        saveBtn.textContent = 'Save to AirTable';
+        saveBtn.disabled = pendingChanges.length === 0;
+      });
+
+      document.getElementById('discardBtn').addEventListener('click', () => {
+        pendingChanges.reverse().forEach(change => {
+          const field = fields.find(f => f.id === change.fieldId);
+          if (field) {
+            field.technicianId = change.oldTechId;
+            field.scheduledDate = change.oldDate;
+          }
+        });
+        pendingChanges = [];
+        renderBacklog();
+        renderTimeline();
+        updateAggregation();
+        updateUnsavedUI();
+      });
+    }
+
+    loadData();
+  </script>
+</body>
+</html>
