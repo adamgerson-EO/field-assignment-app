@@ -85,13 +85,13 @@
 
     .timeline-body { flex: 1; overflow: auto; }
 
-    .tech-row { display: flex; border-bottom: 1px solid #e5e7eb; min-height: 80px; }
+    .tech-row { display: flex; border-bottom: 1px solid #e5e7eb; min-height: 80px; position: relative; }
     .tech-info { width: 180px; padding: 12px 16px; border-right: 1px solid #e5e7eb; background: white; flex-shrink: 0; display: flex; align-items: center; gap: 10px; }
     .tech-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 12px; }
     .tech-name { font-size: 13px; font-weight: 500; color: #111; }
     .tech-location { font-size: 11px; color: #6b7280; }
 
-    .tech-timeline { flex: 1; display: flex; background: #fafafa; }
+    .tech-timeline { flex: 1; display: flex; background: #fafafa; position: relative; }
     .day-cell { min-width: 100px; border-right: 1px solid #f3f4f6; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
     .day-cell.weekend { background: #f3f4f6; }
     .day-cell.today { background: #eff6ff; }
@@ -102,7 +102,7 @@
     }
     .day-cell.unavailable .unavail-label { font-size: 9px; color: #9ca3af; text-align: center; padding: 4px; font-style: italic; }
 
-    .scheduled-field { background: white; border-radius: 6px; padding: 6px 8px; font-size: 11px; border-left: 3px solid; box-shadow: 0 1px 3px rgba(0,0,0,0.1); cursor: grab; }
+    .scheduled-field { background: white; border-radius: 6px; padding: 6px 8px; font-size: 11px; border-left: 3px solid; box-shadow: 0 1px 3px rgba(0,0,0,0.1); cursor: grab; position: absolute; top: 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; box-sizing: border-box; z-index: 2; }
 
     .aggregation-panel { background: white; border-top: 1px solid #e5e7eb; padding: 16px; flex-shrink: 0; }
     .aggregation-toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; font-weight: 500; color: #374151; }
@@ -315,8 +315,6 @@
           const isToday = dateStr === formatDate(today);
           const unavailReason = isUnavailable(tech.id, dateStr);
 
-          const scheduled = fields.filter(f => f.technicianId === tech.id && f.scheduledDate === dateStr);
-
           if (unavailReason) {
             return `
               <div class="day-cell unavailable ${isWeekend ? 'weekend' : ''} ${isToday ? 'today' : ''}"
@@ -329,12 +327,27 @@
           return `
             <div class="day-cell ${isWeekend ? 'weekend' : ''} ${isToday ? 'today' : ''}"
                  data-tech-id="${tech.id}" data-date="${dateStr}">
-              ${scheduled.map(field => `
-                <div class="scheduled-field" draggable="true" data-field-id="${field.id}" style="border-color: ${tech.color}">
-                  <strong>${field.name}</strong><br>
-                  <span style="font-size:10px;color:#6b7280">${Math.round(field.acres)} ac | ${getTechDays(field)} td</span>
-                </div>
-              `).join('')}
+            </div>
+          `;
+        }).join('');
+
+        // Build overlay bars for scheduled fields
+        const techFields = fields.filter(f => f.technicianId === tech.id && f.scheduledDate);
+        const CELL_WIDTH = 100; // matches min-width of .day-cell
+        const fieldBars = techFields.map((field, idx) => {
+          const startDate = new Date(field.scheduledDate + 'T00:00:00');
+          const firstDate = dates[0];
+          const dayOffset = Math.round((startDate - firstDate) / (1000 * 60 * 60 * 24));
+          if (dayOffset < 0 || dayOffset >= dates.length) return '';
+          const techDays = getTechDays(field);
+          const barWidth = Math.max(techDays, 1) * CELL_WIDTH - 8;
+          const leftPos = dayOffset * CELL_WIDTH + 4;
+          const topPos = 8 + idx * 42;
+          return `
+            <div class="scheduled-field" draggable="true" data-field-id="${field.id}"
+                 style="border-color: ${tech.color}; left: ${leftPos}px; width: ${barWidth}px; top: ${topPos}px;">
+              <strong>${field.name}</strong>
+              <span style="font-size:10px;color:#6b7280;margin-left:6px">${Math.round(field.acres)} ac | ${getTechDays(field)} td</span>
             </div>
           `;
         }).join('');
@@ -345,7 +358,7 @@
               <div class="tech-avatar" style="background:${tech.color}">${initials}</div>
               <div><div class="tech-name">${tech.fullName}</div><div class="tech-location">${tech.location}</div></div>
             </div>
-            <div class="tech-timeline">${dayCells}</div>
+            <div class="tech-timeline">${dayCells}${fieldBars}</div>
           </div>
         `;
       }).join('');
